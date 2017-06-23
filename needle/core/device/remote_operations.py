@@ -2,7 +2,6 @@ import os
 import time
 import threading
 import subprocess
-import plistlib
 
 from ..utils.constants import Constants
 from ..utils.utils import Utils
@@ -74,11 +73,13 @@ class RemoteOperations(object):
         elif self.dir_exist(path): delete(path)
 
     def dir_list(self, path, recursive=False):
+        if not self.dir_exist(path):
+            return None
         path = Utils.escape_path(path)
-        opts = ''
-        if recursive: opts = '-alR'
+        opts = '-aR' if recursive else ''
         cmd = 'ls {opts} {path}'.format(opts=opts, path=path)
-        return self.command_blocking(cmd)
+        file_list = self.command_blocking(cmd)
+        return map(lambda x: x.strip(), file_list)
 
     def dir_reset(self, path):
         if self.dir_exist(path): self.dir_delete(path)
@@ -160,7 +161,7 @@ class RemoteOperations(object):
     # ==================================================================================================================
     def download(self, src, dst, recursive=False):
         """Download a file from the device."""
-        src, dst = Utils.escape_path_scp(src), Utils.escape_path_scp(dst)
+        src, dst = Utils.escape_path_scp(src), Utils.escape_path(dst)
         self._device.printer.debug("Downloading: %s -> %s" % (src, dst))
 
         cmd = 'sshpass -p "{password}" scp {hostverification} -P {port}'.format(password=self._device._password,
@@ -208,45 +209,21 @@ class RemoteOperations(object):
         cmd = 'chmod +x %s' % fname
         self.command_blocking(cmd)
 
-    def parse_plist(self, plist, convert=True, sanitize=False):
-        """Given a plist file, copy it to temp folder, convert it to XML, and run plutil on it."""
-        def sanitize_plist(plist):
-            self._device.printer.debug('Sanitizing content from: {}'.format(plist_copy))
-            remote_temp = self.build_temp_path_for_file('sanitize_temp')
-            cmd = "tr < {} -d '\\000' > {}".format(plist_copy, remote_temp)
-            self.command_blocking(cmd, internal=True)
-            cmd = "tr < {} -d '\\014' > {}".format(remote_temp, plist_copy)
-            self.command_blocking(cmd, internal=True)
-            cmd = "tr < {} -d '\\015' > {}".format(plist_copy, remote_temp)
-            self.command_blocking(cmd, internal=True)
-            self.file_copy(remote_temp, plist_copy)
-
-        # Copy the plist
-        plist_temp = self.build_temp_path_for_file(plist.strip("'"))
-        plist_copy = Utils.escape_path(plist_temp)
-        self._device.printer.debug('Copy the plist to temp: {}'.format(plist_copy))
-        self.file_copy(plist, plist_copy)
-        # Convert to xml
-        if convert:
-            self._device.printer.debug('Converting plist to XML: {}'.format(plist_copy))
-            cmd = '{plutil} -convert xml1 {plist}'.format(plutil=self._device.DEVICE_TOOLS['PLUTIL'], plist=plist_copy)
-            self.command_blocking(cmd, internal=True)
-        # Get the content
-        self._device.printer.debug('Extracting content from: {}'.format(plist_copy))
-        # Sanitize (possible to have NULL bytes)
-        if sanitize:
-            sanitize_plist(plist_copy)
-        # Cat the content
-        cmd = 'cat {}'.format(plist_copy)
-        out = self.command_blocking(cmd, internal=True)
-        content = str(''.join(out).encode('utf-8'))
-        # Parse it with plistlib
-        self._device.printer.debug('Parsing plist content')
-        pl = plistlib.readPlistFromString(content)
-        return pl
+    def parse_plist(self, plist):
+        """Given a plist file, copy it to temp folder and parse it."""
+        # Get a copy of the plist
+        plist_copy = self._device.local_op.build_temp_path_for_file('plist', None, path=Constants.FOLDER_TEMP)
+        self._device.printer.debug('Copying the plist to temp: {} -> {}'.format(plist, plist_copy))
+        self._device.pull(plist, plist_copy)
+        # Read the plist
+        content = Utils.plist_read_from_file(plist_copy)
+        return content
 
     def read_file(self, fname, grep_args=None):
         """Given a filename, prints its content on screen."""
+        if not self.file_exist(fname):
+            self._device.printer.error('File not found: {}'.format(fname))
+            return
         cmd = 'cat {fname}'.format(fname=fname)
         if grep_args:
             cmd += ' | grep {grep_args}'.format(grep_args=grep_args)

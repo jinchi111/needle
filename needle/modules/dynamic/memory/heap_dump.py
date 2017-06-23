@@ -22,7 +22,7 @@ class Module(BaseModule):
     def __init__(self, params):
         BaseModule.__init__(self, params)
         # Setting default output file
-        self.options['output'] = self.local_op.build_output_path_for_file(self, "heap_dump.txt")
+        self.options['output'] = self.local_op.build_output_path_for_file("heap_dump.txt", self)
 
     # ==================================================================================================================
     # RUN
@@ -31,7 +31,7 @@ class Module(BaseModule):
         # Launch the app
         self.printer.info("Launching the app...")
         self.device.app.open(self.APP_METADATA['bundle_id'])
-        pid = self.device.app.search_pid(self.APP_METADATA['name'])
+        pid = self.device.app.search_pid(self.APP_METADATA['binary_name'])
 
         # Create temp files/folders
         dir_dumps = self.device.remote_op.build_temp_path_for_file("gdb_dumps")
@@ -59,8 +59,7 @@ class Module(BaseModule):
         # Check if we have dumps
         self.printer.verbose("Checking if we have dumps...")
         file_list = self.device.remote_op.dir_list(dir_dumps, recursive=True)
-        failure = filter(lambda x: 'total 0' in x, file_list)
-        if failure:
+        if not file_list:
             self.printer.error('It was not possible to attach to the process (known issue in iOS9. A Fix is coming soon)')
             return
 
@@ -71,5 +70,6 @@ class Module(BaseModule):
 
         if strings:
             self.print_cmd_output(strings, self.options['output'])
+            self.add_issue('Strings found in heap dump', None, 'INVESTIGATE', self.options['out'])
         else:
             self.printer.warning("No strings found. The app might employ anti-debugging techniques.")

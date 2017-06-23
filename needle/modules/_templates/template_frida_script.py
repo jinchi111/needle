@@ -25,9 +25,7 @@ if(ObjC.available) {
     def __init__(self, params):
         FridaScript.__init__(self, params)
         # Setting default output file
-        self.options['output'] = self.local_op.build_output_path_for_file(self, "template.txt")
-        # Output array (do not delete)
-        self.output = []
+        self.options['output'] = self.local_op.build_output_path_for_file("template.txt", self)
 
     # ==================================================================================================================
     # RUN
@@ -42,6 +40,7 @@ if(ObjC.available) {
             script.load()
         except Exception as e:
             self.printer.warning("Script terminated abruptly")
+            self.printer.warning(e)
 
-        # Save to file
-        self.print_cmd_output(self.output, self.options['output'], silent=True)
+    def module_post(self):
+        self.print_cmd_output()

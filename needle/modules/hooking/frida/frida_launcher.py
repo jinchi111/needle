@@ -18,7 +18,7 @@ class Module(FridaScript):
     def __init__(self, params):
         FridaScript.__init__(self, params)
         # Setting default output file
-        self.options['output'] = self.local_op.build_output_path_for_file(self, "frida_launcher.txt")
+        self.options['output'] = self.local_op.build_output_path_for_file("frida_launcher.txt", self)
         self.output = []
 
     # ==================================================================================================================
@@ -37,4 +37,4 @@ class Module(FridaScript):
         self.printer.notify("Payload loaded. You can continue to use the app now...")
 
         # Save to file
-        self.print_cmd_output(self.output, self.options['output'], silent=True)
+        self.print_cmd_output()

@@ -12,6 +12,8 @@ class Module(BaseModule):
         'options': (
             ('analyze', True, True, 'Prompt to pick one file to analyze'),
             ('dump_all', False, True, 'Retrieve all SQL files'),
+            ('row_counts', True, False, 'Prints the number of rows in all database tables if '
+                                         'ANALYZE is also True'),
             ('output', True, False, 'Full path of the output folder'),
             ('headers', True, True, 'Enable SQLite3 table headers'),
             ('column_mode', True, True, 'Enable SQLite3 column mode'),
@@ -30,11 +32,42 @@ class Module(BaseModule):
         # Setting default output file
         self.options['output'] = self._global_options['output_folder']
 
+    def _print_rows(self, fname):
+        self.printer.notify("Getting table row counts...")
+        # Get all tables
+        sql = '.tables'
+        cmd = '{bin} {db} "{sql}"'.format(bin=self.TOOLS_LOCAL['SQLITE3'],
+                                          db=fname, sql=sql)
+        out = self.local_op.command_blocking(cmd)
+        # Get row counts for all the tables
+        sql = ''
+        for line in out:
+            for item in line.split():
+                sql += "SELECT '{item}' as 'Table', count (*) as 'Rows' from {item} UNION ".format(item=item)
+        if sql:
+            # Trim off the final 'UNION' from the query
+            sql = sql[:len(sql)-6]
+            cmd = '{bin} {db} "{sql}"'.format(bin=self.TOOLS_LOCAL['SQLITE3'],
+                                          db=fname, sql=sql)
+            out = self.local_op.command_blocking(cmd)
+            out_parsed = filter(None, out[0].split('\n'))
+            # Print the result to screen
+            rows = []
+            for elem in out_parsed:
+                tmp = elem.split('|')
+                rows.append([tmp[0], tmp[1]])
+
+            self.print_table(rows, header=['Table','Rows'])
+
     def analyze_file(self, fname):
-        self.printer.info("Spawning SQLite3 console...")
         cmd_headers = ' -header' if self.options['headers'] else ''
         cmd_column = ' -column' if self.options['column_mode'] else ''
         cmd_csv = ' -csv' if self.options['csv_mode'] else ''
+        # Print row count
+        if self.options['row_counts']:
+            self._print_rows(fname)
+        # Spawn SQLite3 console
+        self.printer.info("Spawning SQLite3 console...")
         cmd = '{bin} {header} {column} {csv} {db}'.format(bin=self.TOOLS_LOCAL['SQLITE3'],
                                                           header=cmd_headers, column=cmd_column, csv=cmd_csv,
                                                           db=fname)
@@ -45,7 +78,7 @@ class Module(BaseModule):
             return
         # Prepare path
         temp_name = 'sql_{}'.format(local_name)
-        local_name = self.local_op.build_output_path_for_file(self, temp_name)
+        local_name = self.local_op.build_output_path_for_file(temp_name, self)
         # Save to file
         self.device.pull(remote_name, local_name)
         # Analyze
@@ -60,13 +93,16 @@ class Module(BaseModule):
         # Compose cmd string
         dirs = [self.APP_METADATA['bundle_directory'], self.APP_METADATA['data_directory']]
         dirs_str = ' '.join(dirs)
-        cmd = '{bin} {dirs_str} -type f -name "*sql*"'.format(bin=self.device.DEVICE_TOOLS['FIND'], dirs_str=dirs_str)
+        cmd = '{bin} {dirs_str} -type f -name "*.sql" -o -name "*.sqlite" -o -name "*.db" -o -name "*.db3"'.format(bin=self.device.DEVICE_TOOLS['FIND'], dirs_str=dirs_str)
         out = self.device.remote_op.command_blocking(cmd)
 
         # No files found
         if not out:
             self.printer.error("No SQL files found")
             return
+
+        # Save list
+        self.add_issue('SQL files detected', out, 'INVESTIGATE', None)
 
         # Add data protection class
         self.printer.info("Retrieving data protection classes...")

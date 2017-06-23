@@ -30,12 +30,12 @@ class Module(BaseModule):
 
     def save_file(self, remote_name, local_name, silent):
         """Convert the plist file to XML and save it locally"""
-        # Run plutil
+        # Parse the plist
         self.printer.debug("Dumping content of the file: {}".format(remote_name))
         pl = self.device.remote_op.parse_plist(remote_name)
         # Prepare path
         local_name = 'plist_{}'.format(local_name)
-        plist_path = self.local_op.build_output_path_for_file(self, local_name)
+        plist_path = self.local_op.build_output_path_for_file(local_name, self)
         # Print & Save to file
         outfile = str(plist_path) if self.options['output'] else None
         self.print_cmd_output(pl, outfile, silent)
@@ -56,6 +56,9 @@ class Module(BaseModule):
         if not out:
             self.printer.error("No Plist files found")
             return
+
+        # Save list
+        self.add_issue('Plist files detected', out, 'INVESTIGATE', None)
 
         # Add data protection class
         self.printer.info("Retrieving data protection classes...")

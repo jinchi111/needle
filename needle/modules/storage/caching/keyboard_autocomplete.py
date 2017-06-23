@@ -18,7 +18,7 @@ class Module(BaseModule):
     def __init__(self, params):
         BaseModule.__init__(self, params)
         # Setting default output file
-        self.options['output'] = self.local_op.build_output_path_for_file(self, "keyboard_autocomplete.txt")
+        self.options['output'] = self.local_op.build_output_path_for_file("keyboard_autocomplete.txt", self)
 
     def module_pre(self):
         return BaseModule.module_pre(self, bypass_app=True)
@@ -31,7 +31,7 @@ class Module(BaseModule):
         self.printer.info("Running strings over keyboard autocomplete databases...")
 
         # Run Strings
-        cmd = '{bin} {dirs_str} -type f \( -iname "dynamic-text.dat" -o' \
+        cmd = '{bin} {dirs_str} -type f \( -iname "*dynamic-text.dat" -o' \
               ' -iname "dynamic.dat" -o -iname "lexicon.dat" \) ' \
               '-exec {strings} {{}} \;'.format(bin=self.device.DEVICE_TOOLS['FIND'],
                                                dirs_str="/var/mobile/Library/Keyboard/",
@@ -42,3 +42,4 @@ class Module(BaseModule):
         if out:
             self.printer.notify("The following content has been found:")
             self.print_cmd_output(out, self.options['output'])
+            self.add_issue('Content of Keyboard Autocomplete', None, 'INVESTIGATE', self.options['output'])
