@@ -62,6 +62,7 @@ if (ObjC.available) {
         return SSLSetSessionOption(context, option, value);
     }, 'int', ['pointer', 'int', 'bool']));
 
+
     //
     // OLD WAY
     //
